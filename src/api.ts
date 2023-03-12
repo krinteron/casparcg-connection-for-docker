@@ -216,8 +216,9 @@ export class BasicCasparCGAPI extends EventEmitter<ConnectionEvents> {
 			(req) => req.processed && req.processedTime && req.processedTime < Date.now() - this._timeoutTime
 		)
 		deadRequests.forEach((req) => {
-			req.reject(new Error('Time out'))
-			req.sentResolve({ request: undefined, error: new Error('Time out') })
+			// req.reject(new Error('Time out'))
+			// req.sentResolve({ request: undefined, error: new Error('Time out') })
+			req.sentResolve({ request: new Promise((resolve) => resolve), error: undefined })
 		})
 		this._requestQueue = this._requestQueue.filter((req) => !deadRequests.includes(req))
 	}

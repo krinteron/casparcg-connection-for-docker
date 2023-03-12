@@ -15,7 +15,11 @@ export enum ResponseTypes {
 	ServerError = 'FAILED',
 }
 
-const RESPONSES = {
+interface romanType {
+	[key: number]: any
+}
+
+const RESPONSES: romanType = {
 	100: {
 		type: ResponseTypes.Info,
 		message: 'Information about an event.',
@@ -83,13 +87,14 @@ export type ConnectionEvents = {
 
 export class Connection extends EventEmitter<ConnectionEvents> {
 	private _socket?: Socket
-	private _unprocessedLines: string[] = []
 	private _reconnectTimeout?: NodeJS.Timeout
 	private _connected = false
 	private _version = Version.v23x
+	private _chunk: string
 
 	constructor(private host: string, private port = 5250, autoConnect: boolean) {
 		super()
+		this._chunk = ''
 		if (autoConnect) this._setupSocket()
 	}
 
@@ -127,52 +132,41 @@ export class Connection extends EventEmitter<ConnectionEvents> {
 
 	private async _processIncomingData(data: Buffer) {
 		const string = data.toString('utf-8')
-		const newLines = string.split('\r\n')
+		let newLines = string.split('\r\n')
+		let result = RESPONSE_REGEX.exec(newLines[0])
+		let responseCode = result && result?.groups?.['ResponseCode'] ? parseInt(result?.groups?.['ResponseCode']) : 0
 
-		this._unprocessedLines.push(...newLines)
-
-		while (this._unprocessedLines.length > 0) {
-			const result = RESPONSE_REGEX.exec(this._unprocessedLines[0])
-			let processedLines = 0
-
-			if (result && result.groups?.['ResponseCode']) {
-				// create a response object
-				const responseCode = parseInt(result?.groups?.['ResponseCode'])
-				const response = {
-					reqId: result?.groups?.['ReqId'],
-					command: result?.groups?.['Action'] as Commands,
-					responseCode,
-					data: [] as any[],
-					...RESPONSES[responseCode as keyof typeof RESPONSES],
-				}
-				processedLines++
-
-				// parse additional lines if needed
-				if (response.responseCode === 200) {
-					// multiple lines of data
-					response.data = this._unprocessedLines.slice(1, this._unprocessedLines.indexOf(''))
-					processedLines += response.data.length + 1 // data lines + 1 empty line
-				} else if (response.responseCode === 201 || response.responseCode === 400) {
-					response.data = [this._unprocessedLines[1]]
-					processedLines++
-				}
-
+		if (responseCode && data.length === 1460) {
+			this._chunk = string
+			return
+		}
+		if (!responseCode) {
+			if (!this._chunk) return
+			const input = this._chunk + string
+			this._chunk = ''
+			newLines = input.split('\r\n')
+			result = RESPONSE_REGEX.exec(newLines[0])
+			responseCode = result && result?.groups?.['ResponseCode'] ? parseInt(result?.groups?.['ResponseCode']) : 0
+		}
+		if (result && result?.groups?.['ResponseCode']) {
+			const response = {
+				reqId: result?.groups?.['ReqId'],
+				command: result?.groups?.['Action'] as Commands,
+				responseCode,
+				data: [],
+				...RESPONSES[responseCode],
+			}
+			if (response.responseCode === 200) {
+				response.data = newLines.slice(1)
+			}
+			if ([201, 400].includes(responseCode)) {
+				response.data = [newLines[1]]
 				const deserializers = this._getVersionedDeserializers()
-				// attempt to deserialize the response if we can
 				if (deserializers[response.command] && response.data.length) {
 					response.data = await deserializers[response.command](response.data)
 				}
-
-				// now do something with response
-				this.emit('data', response)
-			} else {
-				// well this is not happy, do we do something?
-				// perhaps this is the infamous 100 or 101 response code, although that doesn't appear in casparcg source code
-				processedLines++
 			}
-
-			// remove processed lines
-			this._unprocessedLines.splice(0, processedLines)
+			this.emit('data', response)
 		}
 	}
 
