@@ -160,7 +160,7 @@ export interface CGLayer {
 
 export interface CgAddParameters extends ChannelLayer, CGLayer {
 	template: string
-	playOnLoad: boolean
+	playOnLoad: number
 	data?: Record<string, any> | string
 }
 export interface CgPlayParameters extends ChannelLayer, CGLayer {}
