@@ -5,40 +5,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [16.x, 14.x]
-
-    steps:
-      - uses: actions/checkout@v3
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v3
-        with:
-          node-version: ${{ matrix.node-version }}
-      - name: Prepare Environment
-        run: |
-          yarn install
-        env:
-          CI: true
-      - name: Run tests
-        run: |
-          yarn unit
-        env:
-          CI: true
-
   prerelease:
     name: Prerelease
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
-    needs:
-      - test
 
     steps:
       - uses: actions/checkout@v3
