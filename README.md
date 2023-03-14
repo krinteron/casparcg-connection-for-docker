@@ -1,6 +1,6 @@
 # This is FORK!
 
-The  original package is written by the great people at https://github.com/SuperFlyTV and third party contributors.
+The original package is written by the great people at https://github.com/SuperFlyTV and third party contributors.
 In this package, I have changed the way I set up connection and I/O commands for the CasparCG server.
 The reason was to improve the stability of the package when running in a Docker container.
 
