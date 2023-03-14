@@ -10,16 +10,6 @@ export interface Options {
 	cmdTimeoutTime?: number
 }
 
-export type SendResult =
-	| {
-			error: Error
-			request: undefined
-	  }
-	| {
-			error: undefined
-			request: Promise<Response>
-	  }
-
 export interface Response {
 	reqId?: string
 	command: Commands
@@ -47,7 +37,7 @@ export class BasicCasparCGAPI {
 		this._cmdTimeoutTime = options?.cmdTimeoutTime || 5000
 	}
 
-	async executeCommand(command: AMCPCommand): Promise<SendResult> {
+	async executeCommand(command: AMCPCommand): Promise<Response> {
 		const serverPath: ServerSettings = {
 			port: this._port,
 			host: this._host,
