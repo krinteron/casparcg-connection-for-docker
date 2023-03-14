@@ -1,5 +1,5 @@
 {
-	"name": "casparcg-connection",
+	"name": "casparcg-connection-for-docker",
 	"version": "6.0.1",
 	"description": "Node.js Javascript/Typescript library for CasparCG connection and commands.",
 	"main": "dist/index.js",
@@ -7,16 +7,16 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/SuperFlyTV/casparcg-connection.git"
+		"url": "https://github.com/krinteron/casparcg-connection-for-docker.git"
 	},
 	"bugs": {
-		"url": "https://github.com/SuperFlyTV/casparcg-connection/issues"
+		"url": "https://github.com/krinteron/casparcg-connection-for-docker/issues"
 	},
 	"homepage": "http://superfly.tv",
 	"author": {
-		"name": "Jesper Stærkær",
-		"email": "jesper@superfly.tv",
-		"url": "http://superfly.tv"
+		"name": "Krinteron",
+		"email": "krinteron@gmail.com",
+		"url": "https://github.com/krinteron"
 	},
 	"contributors": [
 		{
@@ -47,6 +47,11 @@
 		{
 			"name": "Stephan Nordnes Eriksen",
 			"email": "Stephanruler@gmail.com"
+		},
+		{
+			"name": "Krinteron",
+			"email": "krinteron@gmail.com",
+			"url": "https://github.com/krinteron"
 		}
 	],
 	"scripts": {
@@ -108,8 +113,8 @@
 	],
 	"dependencies": {
 		"eventemitter3": "^4.0.7",
-		"tslib": "^2.5.0",
-		"xml2js": "^0.4.23"
+		"fast-xml-parser": "^4.1.3",
+		"tslib": "^2.5.0"
 	},
 	"prettier": "@sofie-automation/code-standard-preset/.prettierrc.json",
 	"lint-staged": {

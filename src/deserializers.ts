@@ -1,5 +1,5 @@
 import { Commands } from './commands'
-import { parseStringPromise } from 'xml2js'
+import { XMLValidator, XMLParser } from 'fast-xml-parser'
 import { Version } from './enums'
 
 const deserializeClipInfo = (line: string) => {
@@ -21,30 +21,21 @@ const deserializeClipInfo = (line: string) => {
 	}
 }
 
-const deserializeXML = async (line: string): Promise<any> => {
-	return await parseStringPromise(line) // todo - this seems to get stuck when we pass it non-xml
-}
+const parserXML = new XMLParser()
 
 const deserializeInfo = async (line: string): Promise<any> => {
-	if (line.startsWith('<?xml')) {
-		// parse as xml
-		return deserializeXML(line)
-	}
-
-	// parse as generic info (no params)
-	const info = line.match(/(?<ChannelNo>\d) (?<Format>\d+(?<Interlaced>p|i)(?<Channelrate>\d+)) .*/i)
-	if (info) {
-		return {
-			channel: info.groups?.ChannelNo,
-			format: info.groups?.Format,
-			channelRate: parseInt(info.groups?.Channelrate || '') / 100,
-			frameRate: parseInt(info.groups?.Channelrate || '') / 100, // note - under 2.3 the 50i channels should use 50p calculations
-			interlaced: info.groups?.Interlaced === 'i',
+	return Promise.resolve().then(() => {
+		if (line === '') return ''
+		const isXML = line.startsWith('<?xml')
+		const isValidXML = XMLValidator.validate(line, {
+			allowBooleanAttributes: true,
+		})
+		if (isXML && isValidXML === true) {
+			// parse as xml
+			return parserXML.parse(line)
 		}
-	}
-
-	// no idea what it is - just return
-	return line
+		throw new Error('XML is corrupted')
+	})
 }
 
 const deserializeVersion = (line: string): any => {

@@ -1,11 +1,11 @@
-import { EventEmitter } from 'eventemitter3'
 import { Socket } from 'net'
-import { Response } from './api'
+import type { Response, ServerSettings } from './api'
 import { AMCPCommand, Commands } from './commands'
 import { deserializers } from './deserializers'
-import { Version } from './enums'
 import { serializers, serializersV21 } from './serializers'
+import { Version } from './enums'
 
+const version = Version.v23x
 const RESPONSE_REGEX = /(RES (?<ReqId>.+) )?(?<ResponseCode>\d{3}) ((?<Action>.+) )?(OK|ERROR|FAILED)/i
 
 export enum ResponseTypes {
@@ -77,183 +77,85 @@ const RESPONSES: romanType = {
 		message: 'Access error',
 	},
 }
+const serializeCommand = (cmd: AMCPCommand, reqId?: string): string => {
+	const serializers = getVersionedSerializers()
 
-export type ConnectionEvents = {
-	data: [response: Response]
-	connect: []
-	disconnect: []
-	error: [error: Error]
+	// use a cheeky type assertion here to easen up a bit, TS doesn't let us use just cmd.command
+	const serializer = serializers[cmd.command] as ((c: AMCPCommand['command'], p: AMCPCommand['params']) => string)[]
+	let payload = serializer
+		.map((fn) => fn(cmd.command, cmd.params).trim())
+		.filter((p) => p !== '')
+		.join(' ')
+
+	if (reqId) payload = 'REQ ' + reqId + ' ' + payload
+
+	return payload
 }
 
-export class Connection extends EventEmitter<ConnectionEvents> {
-	private _socket?: Socket
-	private _reconnectTimeout?: NodeJS.Timeout
-	private _connected = false
-	private _version = Version.v23x
-	private _chunk: string
-
-	constructor(private host: string, private port = 5250, autoConnect: boolean) {
-		super()
-		this._chunk = ''
-		if (autoConnect) this._setupSocket()
+const getVersionedSerializers = () => {
+	if (version <= Version.v21x) {
+		return serializersV21
 	}
+	return serializers
+}
 
-	get connected(): boolean {
-		return this._connected
-	}
+const getVersionedDeserializers = () => {
+	return deserializers
+}
+export const sendCommand = async (server: ServerSettings, cmd: AMCPCommand): Promise<any> => {
+	if (!cmd.command) throw new Error('No command specified')
+	if (!cmd.params) throw new Error('No parameters specified')
+	const reqId = Math.random().toString(35).slice(2, 7)
+	const payload = serializeCommand(cmd, reqId)
+	const message: string[] = []
+	let timeoutId: NodeJS.Timeout
+	const socket = new Socket()
+	socket.setEncoding('utf-8')
 
-	set version(version: Version) {
-		this._version = version
-	}
-
-	changeConnection(host: string, port = 5250): void {
-		this.host = host
-		this.port = port
-
-		this._socket?.end()
-
-		this._setupSocket()
-	}
-
-	disconnect(): void {
-		this._socket?.end()
-	}
-
-	async sendCommand(cmd: AMCPCommand, reqId?: string): Promise<Error | undefined> {
-		if (!cmd.command) throw new Error('No command specified')
-		if (!cmd.params) throw new Error('No parameters specified')
-
-		const payload = this._serializeCommand(cmd, reqId)
-
-		return new Promise<Error | undefined>((r) => {
-			this._socket?.write(payload + '\r\n', (e) => (e ? r(e) : r(undefined)))
+	return new Promise((resolve, reject) => {
+		socket.on('connect', () => {
+			socket.write(payload + '\r\n', (e) => {
+				if (e) reject(e)
+			})
 		})
-	}
-
-	private async _processIncomingData(data: Buffer) {
-		const string = data.toString('utf-8')
-		let newLines = string.split('\r\n')
-		let result = RESPONSE_REGEX.exec(newLines[0])
-		let responseCode = result && result?.groups?.['ResponseCode'] ? parseInt(result?.groups?.['ResponseCode']) : 0
-
-		if (responseCode && data.length === 1460) {
-			this._chunk = string
-			return
-		}
-		if (!responseCode) {
-			if (!this._chunk) return
-			const input = this._chunk + string
-			this._chunk = ''
-			newLines = input.split('\r\n')
-			result = RESPONSE_REGEX.exec(newLines[0])
-			responseCode = result && result?.groups?.['ResponseCode'] ? parseInt(result?.groups?.['ResponseCode']) : 0
-		}
-		if (result && result?.groups?.['ResponseCode']) {
-			const response = {
-				reqId: result?.groups?.['ReqId'],
-				command: result?.groups?.['Action'] as Commands,
-				responseCode,
-				data: [],
-				...RESPONSES[responseCode],
-			}
-			if (response.responseCode === 200) {
-				response.data = newLines.slice(1)
-			}
-			if ([201, 400].includes(responseCode)) {
-				response.data = [newLines[1]]
-				const deserializers = this._getVersionedDeserializers()
-				if (deserializers[response.command] && response.data.length) {
-					response.data = await deserializers[response.command](response.data)
+		socket.on('error', (e) => reject(e))
+		socket.on('data', (data) => {
+			void (async () => {
+				const string = data.toString('utf-8')
+				message.push(string)
+				clearTimeout(timeoutId)
+				const newLines = message.join('').trim().split('\r\n')
+				const result = RESPONSE_REGEX.exec(newLines[0])
+				const responseCode =
+					result && result?.groups?.['ResponseCode'] ? parseInt(result?.groups?.['ResponseCode']) : 0
+				const response: Response = {
+					reqId: result?.groups?.['ReqId'],
+					command: result?.groups?.['Action'] as Commands,
+					responseCode,
+					data: newLines.slice(1),
+					...RESPONSES[responseCode],
 				}
-			}
-			this.emit('data', response)
-		}
-	}
-
-	private _triggerReconnect() {
-		if (!this._reconnectTimeout) {
-			this._reconnectTimeout = setTimeout(() => {
-				this._reconnectTimeout = undefined
-
-				if (!this._connected) this._setupSocket()
-			}, 5000)
-		}
-	}
-
-	private _setupSocket() {
-		if (this._socket) {
-			this._socket.removeAllListeners()
-			if (!this._socket.destroyed) {
-				this._socket.destroy()
-			}
-		}
-
-		this._socket = new Socket()
-		this._socket.setEncoding('utf-8')
-
-		this._socket.on('data', (data) => {
-			this._processIncomingData(data).catch((e) => this.emit('error', e))
+				if ([200].includes(responseCode)) {
+					return resolve(response)
+				} else if ([201, 202, 400].includes(responseCode)) {
+					const deserializers = getVersionedDeserializers()
+					if (deserializers[response.command] && response.data.length) {
+						try {
+							response.data = await deserializers[response.command](response.data)
+							return resolve(response)
+						} catch (e) {
+							timeoutId = setTimeout(() => {
+								return reject('Time Out')
+							}, server.cmdTimeoutTime)
+						}
+					} else return resolve(response)
+				} else return reject(RESPONSES[responseCode])
+			})()
 		})
-		this._socket.on('connect', () => {
-			this._setConnected(true)
+		socket.connect(server.port, server.host)
+	})
+		.catch((error) => {
+			throw error
 		})
-		this._socket.on('close', () => {
-			this._setConnected(false)
-			this._triggerReconnect()
-		})
-		this._socket.on('error', (e) => {
-			if (`${e}`.match(/ECONNREFUSED/)) {
-				// Unable to connect, no need to handle this error
-				this._setConnected(false)
-			} else {
-				this.emit('error', e)
-			}
-		})
-
-		this._socket.connect(this.port, this.host)
-	}
-
-	private _setConnected(connected: boolean) {
-		if (connected) {
-			if (!this._connected) {
-				this._connected = true
-				this.emit('connect')
-			}
-		} else {
-			if (this._connected) {
-				this._connected = false
-				this.emit('disconnect')
-			}
-		}
-	}
-
-	private _serializeCommand(cmd: AMCPCommand, reqId?: string): string {
-		const serializers = this._getVersionedSerializers()
-
-		// use a cheeky type assertion here to easen up a bit, TS doesn't let us use just cmd.command
-		const serializer = serializers[cmd.command] as ((
-			c: AMCPCommand['command'],
-			p: AMCPCommand['params']
-		) => string)[]
-		let payload = serializer
-			.map((fn) => fn(cmd.command, cmd.params).trim())
-			.filter((p) => p !== '')
-			.join(' ')
-
-		if (reqId) payload = 'REQ ' + reqId + ' ' + payload
-
-		return payload
-	}
-
-	private _getVersionedSerializers() {
-		if (this._version <= Version.v21x) {
-			return serializersV21
-		}
-
-		return serializers
-	}
-
-	private _getVersionedDeserializers() {
-		return deserializers
-	}
+		.finally(() => socket.destroy())
 }
