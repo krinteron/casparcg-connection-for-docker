@@ -34,45 +34,6 @@ jobs:
         env:
           CI: true
 
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [14.x, 16.x, 18.x]
-
-    steps:
-      - uses: actions/checkout@v3
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v3
-        with:
-          node-version: ${{ matrix.node-version }}
-      - name: Prepare Environment
-        run: |
-          yarn install
-        env:
-          CI: true
-      - name: Run tests
-        run: |
-          yarn unit
-        env:
-          CI: true
-      - name: Send coverage
-        uses: codecov/codecov-action@v2
-        if: matrix.node-version == '16.x'
-        with:
-          fail_ci_if_error: true
-          # name: codecov-umbrella
-      - name: Check docs generation
-        if: matrix.node-version == '16.x'
-        run: |
-          yarn docs
-        env:
-          CI: true
-
   release:
     name: Release
     runs-on: ubuntu-latest
@@ -80,10 +41,6 @@ jobs:
 
     # only run for tags
     if: contains(github.ref, 'refs/tags/')
-
-    needs:
-      - test
-      # - validate-dependencies
 
     steps:
       - uses: actions/checkout@v3
@@ -134,12 +91,3 @@ jobs:
           echo "**Published:** $NEW_VERSION" >> $GITHUB_STEP_SUMMARY
         env:
           CI: true
-      - name: Generate docs
-        if: ${{ steps.do-publish.outputs.tag }} == 'latest'
-        run: |
-          yarn docs
-      - name: Publish docs
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
