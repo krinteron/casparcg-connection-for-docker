@@ -43,7 +43,7 @@ This library is also a part of the [**Sofie** TV News Studio Automation System](
 npm install casparcg-connection --save
 ```
 
-This installs the full project with sourcecode and dependencies, typescript project files and the compiled .js output with typings.
+This installs the full project with  sourcecode and dependencies, typescript project files and the compiled .js output with typings.
 
 In your code, include and use the CasparCG object from this library with a code similar to:
 
