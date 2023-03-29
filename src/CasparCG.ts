@@ -4,6 +4,7 @@ import {
 	LoadbgParameters,
 	LoadParameters,
 	PlayParameters,
+	PlayHtmlParameters,
 	PauseParameters,
 	ResumeParameters,
 	StopParameters,
@@ -95,6 +96,12 @@ export class CasparCG extends BasicCasparCGAPI {
 	async play(params: PlayParameters): Promise<Response> {
 		return this.executeCommand({
 			command: Commands.Play,
+			params,
+		})
+	}
+	async playHtml(params: PlayHtmlParameters): Promise<Response> {
+		return this.executeCommand({
+			command: Commands.PlayHtml,
 			params,
 		})
 	}
