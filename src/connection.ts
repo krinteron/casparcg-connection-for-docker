@@ -113,6 +113,11 @@ export const sendCommand = async (server: ServerSettings, cmd: AMCPCommand): Pro
 	socket.setEncoding('utf-8')
 
 	return new Promise((resolve, reject) => {
+		socket.setTimeout(server.cmdTimeoutTime)
+		socket.on('timeout', () => {
+			socket.destroy()
+			reject()
+		})
 		socket.on('connect', () => {
 			socket.write(payload + '\r\n', (e) => {
 				if (e) reject(e)
