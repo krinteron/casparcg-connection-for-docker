@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. See [Convential Commits](https://www.conventionalcommits.org/en/v1.0.0/#specification) for commit guidelines.
 
+## [6.0.9](http://superfly.tv/compare/v6.0.8...v6.0.9) (Wed Oct 18 2023)
+
+
 ## [6.0.8](http://superfly.tv/compare/v6.0.7...v6.0.8) (Wed Oct 18 2023)
 
 
